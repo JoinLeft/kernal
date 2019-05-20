@@ -97,6 +97,11 @@ class NotORMDatabase /** implements Database */ {
     protected $isKeepPrimaryKeyIndex = FALSE;
 
     /**
+    * @var array $tablenameAliasMap 表名的别名映射关系，主要用于分表回退时的缺省表名修正，避免因类缓存而导致bug，[原来的完全表名 => 修正的新表名]
+    */
+    protected $tablenameAliasMap = array();
+
+    /**
      * @param array $configs 数据库配置 
      * @param boolean $debug 是否开启调试模式
      */
@@ -126,8 +131,11 @@ class NotORMDatabase /** implements Database */ {
             $this->_notorms[$notormKey]->isKeepPrimaryKeyIndex = $this->isKeepPrimaryKeyIndex;
 
             if ($router['isNoSuffix']) {
+                $this->tablenameAliasMap[$name] = $tableName; // 纪录修正的映射关系，来源于小白接口发现的bug
                 $name = $tableName;
             }
+        } else {
+            $name = isset($this->tablenameAliasMap[$name]) ? $this->tablenameAliasMap[$name] : $name; // 缓存下的修正
         }
 
         return $this->_notorms[$notormKey]->$name;
@@ -174,6 +182,13 @@ class NotORMDatabase /** implements Database */ {
     protected function getDBRouter($tableName, $suffix) {
         $rs = array('prefix' => '', 'key' => '', 'pdo' => NULL, 'isNoSuffix' => FALSE);
 
+        if (preg_match('/^(\S+)\.(\S+)$/', $tableName, $match)) {
+            $server = $match[1];
+            if (!isset($this->_configs['tables'][$tableName])) {
+                $this->_configs['tables'][$tableName] = array('map' => array(array('db' => $server)));
+            }
+        }
+
         $defaultMap = !empty($this->_configs['tables']['__default__']) 
             ? $this->_configs['tables']['__default__'] : array();
         $tableMap = !empty($this->_configs['tables'][$tableName]) 
@@ -209,7 +224,7 @@ class NotORMDatabase /** implements Database */ {
                 break;
             }
         }
-        //try to use default map if no perfect match
+        //try to usdbKeye default map if no perfect match
         if ($dbKey === NULL) {
             $dbKey = $dbDefaultKey;
             $rs['isNoSuffix'] = TRUE;
@@ -261,31 +276,38 @@ class NotORMDatabase /** implements Database */ {
 
     /**
      * 针对MySQL的PDO链接，如果需要采用其他数据库，可重载此函数
+     * @link https://www.php.net/manual/en/book.pdo.php
      * @param array $dbCfg 数据库配置
      * @return PDO
      */
     protected function createPDOBy($dbCfg) {
+        // 默认mysql
+        $type = !empty($dbCfg['type']) ? strtolower($dbCfg['type']) : 'mysql';
         $dsn = sprintf('mysql:dbname=%s;host=%s;port=%d',
             $dbCfg['name'], 
             isset($dbCfg['host']) ? $dbCfg['host'] : 'localhost', 
             isset($dbCfg['port']) ? $dbCfg['port'] : 3306
         );
-        $charset = isset($dbCfg['charset']) ? $dbCfg['charset'] : 'UTF8';
-
-        // 支持sql server
-        if (!empty($dbCfg['type']) && strtolower($dbCfg['type']) == 'sqlserver') {
+        
+        if ($type == 'sqlserver' || $type == 'sqlsrv') {  // 支持sql server
             $dsn = sprintf('sqlsrv:Server=%s,%d;Database=%s',
                 isset($dbCfg['host']) ? $dbCfg['host'] : 'localhost', 
                 isset($dbCfg['port']) ? $dbCfg['port'] : 1433, 
                 $dbCfg['name']
             );
+        } else if ($type == 'pgsql') {  // 支持postgreSQL
+            $dsn = sprintf('pgsql:dbname=%s;host=%s;port=%d',
+                $dbCfg['name'],
+                isset($dbCfg['host']) ? $dbCfg['host'] : 'localhost',
+                isset($dbCfg['port']) ? $dbCfg['port'] : 3306
+            );
         }
 
-        $pdo = new PDO(
-            $dsn,
-            $dbCfg['user'],
-            $dbCfg['password']
-        );
+        // 创建PDO连接
+        $pdo = new PDO($dsn, $dbCfg['user'], $dbCfg['password']);
+
+        // 设置编码
+        $charset = isset($dbCfg['charset']) ? $dbCfg['charset'] : 'UTF8';
         $pdo->exec("SET NAMES '{$charset}'");
 
         return $pdo;

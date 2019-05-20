@@ -1,4 +1,8 @@
 <?php
+
+// 搜索关键字
+$keyword = isset($_GET['keyword']) ? $_GET['keyword'] : '';
+
 echo <<<EOT
 <!DOCTYPE html>
 <html lang="en">
@@ -22,18 +26,26 @@ echo <<<EOT
   <div class="ui fixed inverted menu">
     <div class="ui container">
       <a href="/docs.php" class="header item">
-        <img class="logo" src="http://7xiz2f.com1.z0.glb.clouddn.com/20180316214150_f6f390e686d0397f1f1d6a66320864d6">
+        <img class="logo" src="http://cdn7.phalapi.net/20180316214150_f6f390e686d0397f1f1d6a66320864d6">
         {$projectName}
       </a>
       <a href="https://www.phalapi.net/" class="item">PhalApi</a>
       <a href="http://docs.phalapi.net/#/v2.0/" class="item">文档</a>
       <a href="http://qa.phalapi.net/" class="item">社区</a>
+
+     <div class="right menu">
+         <div class="item">
+             <div class="ui icon input">
+             <form action="/docs.php?search=k" method="get">
+                 <input type="text" name="keyword" placeholder="搜索接口" value="{$keyword}">
+             </form>
+             </div>
+         </div>
+      </div>
     </div>
   </div>
 
-<div class="row"></div>
-<br />
-<br />
+<div class="row" style="margin-top: 60px;" ></div>
 
     <div class="ui text container" style="max-width: none !important;">
         <div class="ui floating message">
@@ -52,7 +64,7 @@ echo <<<EOT
                     <p>{$descComment}</p>
                 </div>
             </div>
-            <h3>接口参数</h3>
+            <h3><i class="sign in alternate icon"></i>接口参数</h3>
             <table class="ui red celled striped table" >
                 <thead>
                     <tr><th>参数名字</th><th>类型</th><th>是否必须</th><th>默认值</th><th>其他</th><th>说明</th></tr>
@@ -83,7 +95,13 @@ foreach ($rules as $key => $rule) {
     if ($default === NULL) {
         $default = 'NULL';
     } else if (is_array($default)) {
-        $default = json_encode($default);
+        // @dogstar 20190120 默认值，反序列
+        $ruleFormat = !empty($rule['format']) ? strtolower($rule['format']) : '';
+        if ($ruleFormat == 'explode') {
+            $default = implode(isset($rule['separator']) ? $rule['separator'] : ',', $default);
+        } else {
+            $default = json_encode($default);
+        }
     } else if (!is_string($default)) {
         $default = var_export($default, true);
     }
@@ -114,7 +132,7 @@ foreach ($rules as $key => $rule) {
 echo <<<EOT
                 </tbody>
             </table>
-            <h3>返回结果</h3>
+            <h3><i class="sign out alternate icon"></i>返回结果</h3>
             <table class="ui green celled striped table" >
                 <thead>
                     <tr><th>返回字段</th><th>类型</th><th>说明</th></tr>
@@ -140,7 +158,7 @@ EOT;
  */
 if (!empty($exceptions)) {
     echo <<<EOT
-            <h3>异常情况</h3>
+            <h3><i class="bell icon"></i>异常情况</h3>
             <table class="ui red celled striped table" >
                 <thead>
                     <tr><th>错误码</th><th>错误描述信息</th>
@@ -165,7 +183,7 @@ EOT;
  */
 echo <<<EOT
 <h3>
-    请求模拟 &nbsp;&nbsp;
+    <i class="bug icon"></i>请求模拟 &nbsp;&nbsp;
 </h3>
 EOT;
 
@@ -173,25 +191,35 @@ EOT;
 echo <<<EOT
 <table class="ui green celled striped table" >
     <thead>
-        <tr><th>参数</th><th>是否必填</th><th>值</th></tr>
+        <tr><th width="25%">参数</th><th width="10%">是否必填</th><th width="65%">值</th></tr>
     </thead>
     <tbody id="params">
         <tr>
             <td>service</td>
             <td><font color="red">必须</font></td>
-            <td><input name="service" data-source="get" value="{$service}" style="width:100%;" class="C_input" /></td>
+            <td><div class="ui fluid input disabled"><input name="service" data-source="get" value="{$service}" style="width:100%;" class="C_input" /></div></td>
         </tr>
 EOT;
 foreach ($rules as $key => $rule){
+    $source = isset($rule['source']) ? $rule['source'] : '';
+    //数据源为server和header时该参数不需要提供
+    if ($source == 'server' || $source == 'header') {
+        continue;
+    }
     $name = $rule['name'];
     $require = isset($rule['require']) && $rule['require'] ? '<font color="red">必须</font>' : '可选';
+    // 提供给表单的默认值
     $default = isset($rule['default'])
-        ? (is_array($rule['default']) ? json_encode($rule['default']) : $rule['default'])
+        ? (is_array($rule['default']) // 针对数组，进行反序列化
+            ? (!empty($rule['format']) && $rule['format'] == 'explode' 
+                ? implode(isset($rule['separator']) ? $rule['separator'] : ',', $rule['default']) 
+                : json_encode($rule['default'])) 
+            : $rule['default'])
         : '';
     $default = htmlspecialchars($default);
     $desc = isset($rule['desc']) ? htmlspecialchars(trim($rule['desc'])) : '';
     $inputType = (isset($rule['type']) && $rule['type'] == 'file') ? 'file' : 'text';
-    $source = isset($rule['source']) ? $rule['source'] : '';
+
     $multiple = '';
     if ($inputType == 'file') {
         $multiple = 'multiple="multiple"';
@@ -200,7 +228,7 @@ foreach ($rules as $key => $rule){
         <tr>
             <td>{$name}</td>
             <td>{$require}</td>
-            <td><input name="{$name}" value="{$default}" data-source="{$source}" placeholder="{$desc}" style="width:100%;" class="C_input" type="$inputType" $multiple/></td>
+            <td><div class="ui fluid input"><input name="{$name}" value="{$default}" data-source="{$source}" placeholder="{$desc}" style="width:100%;" class="C_input" type="$inputType" $multiple/></div></td>
         </tr>
 EOT;
 }
@@ -215,10 +243,18 @@ echo <<<EOT
 EOT;
 $url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']) ? 'https://' : 'http://';
 $url = $url . (isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost');
-$url .= substr($_SERVER['SCRIPT_NAME'], 0, strrpos($_SERVER['SCRIPT_NAME'], '/') + 1);
+$url .= trim(substr($_SERVER['SCRIPT_NAME'], 0, strrpos($_SERVER['SCRIPT_NAME'], '/') + 1), '.');
 echo <<<EOT
-&nbsp;<input name="request_url" value="{$url}" style="width:500px; height:24px; line-height:18px; font-size:13px;position:relative; padding-left:5px;margin-left: 10px"/>
-    <input type="submit" name="submit" value="发送" id="submit" style="font-size:14px;line-height: 20px;margin-left: 10px "/>
+<!--
+接口链接：&nbsp;<input name="request_url" value="{$url}" style="width:500px; height:24px; line-height:18px; font-size:13px;position:relative; padding-left:5px;margin-left: 10px"/>
+    <input type="submit" name="submit" value="发送" id="submit" style="font-size:14px;line-height: 20px;margin-left: 10px " class="ui green button" />
+-->
+
+</div>
+
+<div class="ui fluid action input">
+      <input placeholder="请求的接口链接" type="text" name="request_url" value="{$url}" >
+      <button class="ui button green" id="submit" >请求当前接口</button>
 </div>
 EOT;
 
@@ -234,13 +270,33 @@ EOT;
  * 底部
  */
 $version = PHALAPI_VERSION;
+$thisYear = date('Y');
 echo <<<EOT
         <div class="ui blue message">
           <strong>温馨提示：</strong> 此接口参数列表根据后台代码自动生成，可将 ?service= 改成您需要查询的接口/服务
         </div>
-        <p>&copy; Powered  By <a href="http://www.phalapi.net/" target="_blank">PhalApi {$version}</a><span id="version_update"></span></p>
         </div>
+
     </div>
+
+  <div class="ui inverted vertical footer segment" style="margin-top:30px; background: #1B1C1D none repeat scroll 0% 0%;" >
+    <div class="ui container">
+      <div class="ui stackable inverted divided equal height stackable grid">
+        <div class="eight wide column centered">
+            <div class="column" align="center" >
+                <img src="https://www.phalapi.net/images/icon_logo.png" alt="PhalApi">
+            </div>
+            <div class="column" align="center">
+                <p>
+                    <strong>接口，从简单开始！</strong>
+                    © 2015-{$thisYear} Powered  By <a href="http://www.phalapi.net/" target="">PhalApi {$version} </a> All Rights Reserved. <span id="version_update"></span>
+                </p>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
     <script type="text/javascript">
         function getData() {
             var data = new FormData();
@@ -254,7 +310,7 @@ echo <<<EOT
                             data.append(e.name, e.value);
                         }
 
-                        $.cookie(e.name, e.value, {expires: 30});
+                        if (e.name != "service") $.cookie(e.name, e.value, {expires: 30});
                     } else{
                         var files = e.files;
                         if (files.length == 1){

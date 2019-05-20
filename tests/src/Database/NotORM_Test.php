@@ -54,6 +54,22 @@ class PhpUnderControl_PhalApiDBNotORM_Test extends \PHPUnit_Framework_TestCase
     }
 
     /**
+     * 缓存下缺省表名修正 @dogstar 20181201
+     * 不应该出现：PDOException: Table 'phalapi_test.tbl_demo_404' doesn't exist
+     */
+    public function testGetDefaultTableAgainAndAgain()
+    {
+        $demo = $this->notorm->demo_404;
+        $this->assertNotNull($demo);
+        $rs = $demo->fetchAll();
+
+        // 再取一次，有缓存
+        $demo = $this->notorm->demo_404;
+        $this->assertNotNull($demo);
+        $rs = $demo->fetchAll();
+    }
+
+    /**
      * @expectedException \PhalApi\Exception
      */
     public function testNoMap()
@@ -286,5 +302,27 @@ class PhpUnderControl_PhalApiDBNotORM_Test extends \PHPUnit_Framework_TestCase
         $this->notorm->disconnect();
 
         $this->notorm->disconnect();
+    }
+
+    /**
+     *  CREATE TABLE weather (
+     *      city            varchar(80),
+     *      temp_lo         int,           -- low temperature
+     *      temp_hi         int,           -- high temperature
+     *      prcp            real,          -- precipitation
+     *      date            date
+     *  );
+     *
+     * INSERT INTO weather VALUES ('San Francisco', 46, 50, 0.25, '1994-11-27');
+     */
+
+    public function testPostgreConnection()
+    {
+        $cfg = include(dirname(__FILE__) . '/../../config/dbs_pg.php');
+        $notorm_pg = new NotORMDatabase($cfg);
+
+        $total = $notorm_pg->weather->count();
+
+        $this->assertTrue(true);
     }
 }

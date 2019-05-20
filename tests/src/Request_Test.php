@@ -66,6 +66,19 @@ class PhpUnderControl_PhalApiRequest_Test extends \PHPUnit_Framework_TestCase
     }
 
     /**
+     * @expectedException \PhalApi\Exception\BadRequestException
+     * @expectedExceptionMessage 我需要一个正经的整数
+     */
+    public function testGetByComplexRuleWithMessage()
+    {
+        $rule = array('name' => 'year', 'type' => 'int', 'min' => '2000', 'max' => '2013', 'message' => '我需要一个正经的整数');
+
+        $rs = $this->request->getByRule($rule);
+
+        $this->assertSame(2013, $rs);
+    }
+
+    /**
      * @group testGetAll
      */ 
     public function testGetAll()
@@ -77,6 +90,8 @@ class PhpUnderControl_PhalApiRequest_Test extends \PHPUnit_Framework_TestCase
     public function testConstructWithREQUEST()
     {
         $request = new Request();
+
+        $this->assertTrue(true);
     }
 
     /**
@@ -93,6 +108,15 @@ class PhpUnderControl_PhalApiRequest_Test extends \PHPUnit_Framework_TestCase
     public function testGetRequireVal()
     {
         $this->request->getByRule(array('name' => 'requireVal', 'require' => true));
+    }
+
+    /**
+     * @expectedException \PhalApi\Exception\BadRequestException
+     * @expectedExceptionMessage 必须
+     */
+    public function testGetRequireValWithMessage()
+    {
+        $this->request->getByRule(array('name' => 'requireVal', 'require' => true, 'message' => '必须哦'));
     }
 
     public function testGetHeader()
@@ -112,6 +136,18 @@ class PhpUnderControl_PhalApiRequest_Test extends \PHPUnit_Framework_TestCase
         unset($_SERVER['HTTP_ACCEPT']);
         unset($_SERVER['HTTP_ACCEPT_CHARSET']);
         unset($_SERVER['PHP_AUTH_DIGEST']);
+    }
+
+    // 兼容多种拼写方式
+    public function testGetHeaderMoreKindly()
+    {
+        $_SERVER['HTTP_USER_AGENT'] = 'PHPUnit';
+
+        $request = new Request();
+        $this->assertEquals('PHPUnit', $request->getHeader('HTTP_USER_AGENT'));
+        $this->assertEquals('PHPUnit', $request->getHeader('User-Agent'));
+
+        unset($_SERVER['HTTP_USER_AGENG']);
     }
 
     public function testService() {
